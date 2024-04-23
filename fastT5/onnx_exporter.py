@@ -258,34 +258,62 @@ def get_model_paths(pretrained_model, model_path, quantized):
     return encoder_path, decoder_path, init_decoder_path
 
 
+class DynamicQuantConfig:
+    def __init__(
+        self,
+        weight_type=QuantType.QInt8,
+        op_types_to_quantize=None,
+        nodes_to_quantize=None,
+        nodes_to_exclude=None,
+        per_channel=False,
+        reduce_range=False,
+        use_external_data_format=False,
+        extra_options=None,
+    ):
+        self.weight_type = weight_type
+        self.op_types_to_quantize = op_types_to_quantize or []
+        self.nodes_to_quantize = nodes_to_quantize or []
+        self.nodes_to_exclude = nodes_to_exclude or []
+        self.per_channel = per_channel
+        self.reduce_range = reduce_range
+        self.use_external_data_format = use_external_data_format
+        self.extra_options = extra_options or {}
+
+
 def quantize(models_name_or_path):
     """
-    Quantize the weights of the model from float32 to in8 to allow very efficient inference on modern CPU
+    Quantize the weights of the model from float32 to int8 to allow very efficient inference on modern CPU.
 
-    Uses unsigned ints for activation values, signed ints for weights, per
-    https://onnxruntime.ai/docs/performance/quantization.html#data-type-selection
-    it is faster on most CPU architectures
+    Uses unsigned ints for activation values, signed ints for weights, as per the ONNX Runtime documentation
+    this is faster on most CPU architectures.
+
     Args:
-        onnx_model_path: Path to location the exported ONNX model is stored
-    Returns: The Path generated for the quantized
+        models_name_or_path: Iterable of paths to the exported ONNX models.
+
+    Returns:
+        Tuple of paths to the quantized models.
     """
-    from onnxruntime.quantization import quantize_dynamic, QuantType
-
-    bar = Bar("Quantizing...", max=3)
-
+    bar = Bar("Quantizing...", max=len(models_name_or_path))
     quant_model_paths = []
-    for model in models_name_or_path:
-        model_name = model.as_posix()
+
+    for model_path in models_name_or_path:
+        model_name = model_path.as_posix()
         output_model_name = f"{model_name[:-5]}-quantized.onnx"
+
+        quant_config = DynamicQuantConfig(
+            activation_type=QuantType.QUInt8,
+            weight_type=QuantType.QInt8,
+            per_channel=True,
+            reduce_range=True,
+            op_types_to_quantize=['MatMul', 'Relu', 'Add', 'Mul']  # Specific operations to quantize
+        )
+
         quantize_dynamic(
             model_input=model_name,
             model_output=output_model_name,
-            per_channel=True,
-            reduce_range=True, # should be the same as per_channel
-            activation_type=QuantType.QUInt8,
-            weight_type=QuantType.QInt8,  # per docs, signed is faster on most CPUs
-            optimize_model=False,
-        )  # op_types_to_quantize=['MatMul', 'Relu', 'Add', 'Mul' ],
+            quant_config=quant_config
+        )
+
         quant_model_paths.append(output_model_name)
         bar.next()
 
