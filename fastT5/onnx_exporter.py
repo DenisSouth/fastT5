@@ -1,3 +1,5 @@
+from onnxruntime.quantization import QuantType
+
 from .huggingface_utils import get_auth_token
 from .onnx_models_structure import (
     T5Encoder,
