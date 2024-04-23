@@ -303,7 +303,7 @@ def quantize(models_name_or_path):
         output_model_name = f"{model_name[:-5]}-quantized.onnx"
 
         quant_config = DynamicQuantConfig(
-            activation_type=QuantType.QUInt8,
+            #activation_type=QuantType.QUInt8,
             weight_type=QuantType.QInt8,
             per_channel=True,
             reduce_range=True,
